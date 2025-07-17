@@ -1,0 +1,139 @@
+<!-- templates/stations.html (Final Interactive Version) -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>All Stations - TransitPulse</title>
+    <style>
+        body, html { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f8f9fa; margin: 0; height: 100%; overflow: hidden; }
+        .navbar { background-color: #343a40; padding: 15px 30px; color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
+        .navbar-brand { font-size: 24px; font-weight: bold; }
+        .navbar-links a { color: #adb5bd; text-decoration: none; margin-left: 20px; }
+        .navbar-links a.active { color: white; font-weight: bold; }
+        .main-content { display: flex; height: calc(100vh - 60px); }
+        .sidebar { width: 450px; background: #fff; padding: 20px; overflow-y: auto; border-right: 1px solid #dee2e6; }
+        .details-area { flex-grow: 1; padding: 20px; background: #f8f9fa; }
+        .station-list-item, .bus-list-item { padding: 10px 15px; border-bottom: 1px solid #dee2e6; cursor: pointer; transition: background-color 0.2s; }
+        .station-list-item:hover, .bus-list-item:hover { background-color: #e9ecef; }
+        #station-search { width: calc(100% - 24px); padding: 10px; margin-bottom: 10px; border: 1px solid #ced4da; border-radius: 5px; font-size: 16px; }
+        h1, h2, h3 { color: #2c3e50; }
+        h2 { border-bottom: 2px solid #f1f1f1; padding-bottom: 10px; }
+        p.placeholder { color: #6c757d; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-brand">TransitPulse</div>
+        <div class="navbar-links">
+            <a href="/dashboard">Live Operations</a>
+            <a href="/stations" class="active">All Stations</a>
+            <a href="/driver">Driver Co-Pilot</a>
+        </div>
+    </nav>
+
+    <div class="main-content">
+        <div class="sidebar">
+            <h2>All Stations</h2>
+            <input type="text" id="station-search" placeholder="Search for a station...">
+            <div id="station-list">
+                <!-- JavaScript will populate this -->
+            </div>
+        </div>
+        <div class="details-area">
+            <h2 id="active-buses-title">Active Buses</h2>
+            <div id="active-buses-list">
+                <p class="placeholder">Select a station from the list to see live buses heading towards it.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const stationListDiv = document.getElementById('station-list');
+            const stationSearchInput = document.getElementById('station-search');
+            const activeBusesListDiv = document.getElementById('active-buses-list');
+            const activeBusesTitle = document.getElementById('active-buses-title');
+            let allStations = []; // Cache for all stations to make searching fast
+
+            async function fetchAllStations() {
+                stationListDiv.innerHTML = '<p class="placeholder">Loading all stations...</p>';
+                try {
+                    const response = await fetch('/api/all_stations');
+                    if (!response.ok) throw new Error('Failed to load stations.');
+                    
+                    allStations = await response.json();
+                    renderStationList(allStations);
+
+                } catch (error) {
+                    stationListDiv.innerHTML = '<p class="placeholder">Could not load stations.</p>';
+                    console.error("Fetch stations error:", error);
+                }
+            }
+
+            function renderStationList(stations) {
+                stationListDiv.innerHTML = '';
+                if (stations.length === 0) {
+                    stationListDiv.innerHTML = '<p class="placeholder">No stations found.</p>';
+                    return;
+                }
+                stations.forEach(station => {
+                    const stationDiv = document.createElement('div');
+                    stationDiv.className = 'station-list-item';
+                    stationDiv.textContent = station.stop_name;
+                    stationDiv.dataset.stopId = station.stop_id; // Store the ID
+                    
+                    stationDiv.addEventListener('click', () => {
+                        fetchBusesForStation(station.stop_id, station.stop_name);
+                    });
+                    
+                    stationListDiv.appendChild(stationDiv);
+                });
+            }
+
+            async function fetchBusesForStation(stopId, stopName) {
+                activeBusesTitle.textContent = `Active Buses for ${stopName}`;
+                activeBusesListDiv.innerHTML = '<p class="placeholder">Checking for buses...</p>';
+                try {
+                    const response = await fetch(`/api/trips_for_stop/${stopId}`);
+                    if (!response.ok) throw new Error('Failed to fetch bus data.');
+                    
+                    const trips = await response.json();
+                    
+                    activeBusesListDiv.innerHTML = ''; // Clear the "checking" message
+                    if (trips.length === 0) {
+                        activeBusesListDiv.innerHTML = '<p class="placeholder">No active buses are currently heading to this station.</p>';
+                        return;
+                    }
+
+                    trips.forEach(trip => {
+                        const tripDiv = document.createElement('div');
+                        tripDiv.className = 'bus-list-item';
+                        tripDiv.innerHTML = `<strong>Bus ${trip.route_id.replace('RT_', '')}</strong> to ${trip.destination}`;
+                        
+                        tripDiv.addEventListener('click', () => {
+                            alert(`You selected bus ${trip.trip_id}.`);
+                        });
+                        
+                        activeBusesListDiv.appendChild(tripDiv);
+                    });
+
+                } catch (error) {
+                    activeBusesListDiv.innerHTML = '<p class="placeholder">Could not fetch bus data.</p>';
+                    console.error("Fetch buses error:", error);
+                }
+            }
+
+            stationSearchInput.addEventListener('keyup', () => {
+                const query = stationSearchInput.value.toLowerCase();
+                const filteredStations = allStations.filter(station => 
+                    station.stop_name.toLowerCase().includes(query)
+                );
+                renderStationList(filteredStations);
+            });
+
+            fetchAllStations();
+        });
+    </script>
+</body>
+</html>
